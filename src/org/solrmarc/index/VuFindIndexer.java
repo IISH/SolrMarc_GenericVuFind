@@ -47,21 +47,20 @@ import org.solrmarc.tools.CallNumUtils;
 import org.solrmarc.tools.SolrMarcIndexerException;
 import org.solrmarc.tools.Utils;
 import org.ini4j.Ini;
+
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
+
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
 /**
- *
  * @author Robert Haschart
  * @version $Id: VuFindIndexer.java 224 2008-11-05 19:33:21Z asnagy $
- *
  */
-public class VuFindIndexer extends SolrIndexer
-{
+public class VuFindIndexer extends SolrIndexer {
     // Initialize logging category
     static Logger logger = Logger.getLogger(VuFindIndexer.class.getName());
 
@@ -80,6 +79,7 @@ public class VuFindIndexer extends SolrIndexer
 
     /**
      * Default constructor
+     *
      * @param propertiesMapFile
      * @throws Exception
      */
@@ -101,26 +101,26 @@ public class VuFindIndexer extends SolrIndexer
 
     /**
      * Log an error message and throw a fatal exception.
+     *
      * @param msg
      */
-    private void dieWithError(String msg)
-    {
+    private void dieWithError(String msg) {
         logger.error(msg);
         throw new SolrMarcIndexerException(SolrMarcIndexerException.EXIT, msg);
     }
 
     /**
      * Given the base name of a configuration file, locate the full path.
+     *
      * @param filename
      */
-    private File findConfigFile(String filename)
-    {
+    private File findConfigFile(String filename) {
         // Find VuFind's home directory in the environment; if it's not available,
         // try using a relative path on the assumption that we are currently in
         // VuFind's import subdirectory:
         String vufindHome = System.getenv("VUFIND_HOME");
         if (vufindHome == null) {
-            vufindHome = "..";
+            vufindHome = "";
         }
 
         // Check for VuFind 2.0's local directory environment variable:
@@ -129,7 +129,7 @@ public class VuFindIndexer extends SolrIndexer
         // Get the relative VuFind path from the properties file, defaulting to
         // the 2.0alpha-style application/configs if necessary.
         String relativeConfigPath = Utils.getProperty(
-            vuFindConfigs, "vufind.config.relative_path", "application/configs"
+                vuFindConfigs, "vufind.config.relative_path", "application/configs"
         );
 
         // Try several different locations for the file -- VuFind 2 local dir,
@@ -151,10 +151,10 @@ public class VuFindIndexer extends SolrIndexer
 
     /**
      * Sanitize a VuFind configuration setting.
+     *
      * @param str
      */
-    private String sanitizeConfigSetting(String str)
-    {
+    private String sanitizeConfigSetting(String str) {
         // Drop comments if necessary:
         int pos = str.indexOf(';');
         if (pos >= 0) {
@@ -173,10 +173,10 @@ public class VuFindIndexer extends SolrIndexer
 
     /**
      * Load an ini file.
+     *
      * @param filename
      */
-    public Ini loadConfigFile(String filename)
-    {
+    public Ini loadConfigFile(String filename) {
         // Obtain the DSN from the config.ini file:
         Ini ini = new Ini();
         try {
@@ -189,12 +189,12 @@ public class VuFindIndexer extends SolrIndexer
 
     /**
      * Get a setting from a VuFind configuration file.
+     *
      * @param filename
      * @param section
      * @param setting
      */
-    public String getConfigSetting(String filename, String section, String setting)
-    {
+    public String getConfigSetting(String filename, String section, String setting) {
         String retVal = null;
 
         // Grab the ini file.
@@ -216,7 +216,7 @@ public class VuFindIndexer extends SolrIndexer
         //  No setting?  Check for a parent configuration:
         while (retVal == null) {
             String parent = ini.get("Parent_Config", "path");
-            if (parent !=  null) {
+            if (parent != null) {
                 try {
                     ini.load(new FileReader(new File(parent)));
                 } catch (Throwable e) {
@@ -235,14 +235,19 @@ public class VuFindIndexer extends SolrIndexer
     /**
      * Connect to the VuFind database if we do not already have a connection.
      */
-    private void connectToDatabase()
-    {
+    private void connectToDatabase() {
         // Already connected?  Do nothing further!
         if (vufindDatabase != null) {
             return;
         }
 
-        String dsn = getConfigSetting("config.ini", "Database", "database");
+        String dsn = System.getenv("VUFIND_DATABASE_DATABASE");
+        if (dsn == null) {
+            logger.info("Using database setting for key 'config.ini[Database]database' from environment VUFIND_DATABASE_DATABASE") ;
+            dsn = getConfigSetting("config.ini", "Database", "database");
+        } else {
+            logger.info("Used database setting for key 'config.ini[Database]database' from config.ini") ;
+        }
 
         try {
             // Parse key settings from the PHP-style DSN:
@@ -273,16 +278,16 @@ public class VuFindIndexer extends SolrIndexer
             }
 
             // Connect to the database:
+            logger.info("Get connection for " + username + ":" + password + "@" + dsn);
             vufindDatabase = DriverManager.getConnection("jdbc:" + dsn, username, password);
         } catch (Throwable e) {
-            dieWithError("Unable to connect to VuFind database");
+            dieWithError(e.getMessage() + " Unable to connect to VuFind database");
         }
 
         Runtime.getRuntime().addShutdownHook(new VuFindShutdownThread(this));
     }
 
-    private void disconnectFromDatabase()
-    {
+    private void disconnectFromDatabase() {
         if (vufindDatabase != null) {
             try {
                 vufindDatabase.close();
@@ -293,23 +298,19 @@ public class VuFindIndexer extends SolrIndexer
         }
     }
 
-    public void shutdown()
-    {
+    public void shutdown() {
         disconnectFromDatabase();
         shuttingDown = true;
     }
 
-    class VuFindShutdownThread extends Thread
-    {
+    class VuFindShutdownThread extends Thread {
         private VuFindIndexer indexer;
 
-        public VuFindShutdownThread(VuFindIndexer i)
-        {
+        public VuFindShutdownThread(VuFindIndexer i) {
             indexer = i;
         }
 
-        public void run()
-        {
+        public void run() {
             indexer.shutdown();
         }
     }
@@ -317,8 +318,7 @@ public class VuFindIndexer extends SolrIndexer
     /**
      * Establish UpdateDateTracker object if not already available.
      */
-    private void loadUpdateDateTracker()
-    {
+    private void loadUpdateDateTracker() {
         if (tracker == null) {
             connectToDatabase();
             tracker = new UpdateDateTracker(vufindDatabase);
@@ -327,10 +327,10 @@ public class VuFindIndexer extends SolrIndexer
 
     /**
      * Support method for getLatestTransaction.
+     *
      * @return Date extracted from 005 (or very old date, if unavailable)
      */
-    private java.util.Date normalize005Date(String input)
-    {
+    private java.util.Date normalize005Date(String input) {
         // Normalize "null" strings to a generic bad value:
         if (input == null) {
             input = "null";
@@ -341,7 +341,7 @@ public class VuFindIndexer extends SolrIndexer
         java.util.Date retVal;
         try {
             retVal = marc005date.parse(input);
-        } catch(java.text.ParseException e) {
+        } catch (java.text.ParseException e) {
             retVal = new java.util.Date(0);
         }
         return retVal;
@@ -349,10 +349,10 @@ public class VuFindIndexer extends SolrIndexer
 
     /**
      * Support method for getLatestTransaction.
+     *
      * @return Date extracted from 008 (or very old date, if unavailable)
      */
-    private java.util.Date normalize008Date(String input)
-    {
+    private java.util.Date normalize008Date(String input) {
         // Normalize "null" strings to a generic bad value:
         if (input == null || input.length() < 6) {
             input = "null";
@@ -363,9 +363,9 @@ public class VuFindIndexer extends SolrIndexer
         java.util.Date retVal;
         try {
             retVal = marc008date.parse(input.substring(0, 6));
-        } catch(java.lang.StringIndexOutOfBoundsException e) {
+        } catch (java.lang.StringIndexOutOfBoundsException e) {
             retVal = new java.util.Date(0);
-        } catch(java.text.ParseException e) {
+        } catch (java.text.ParseException e) {
             retVal = new java.util.Date(0);
         }
         return retVal;
@@ -406,7 +406,7 @@ public class VuFindIndexer extends SolrIndexer
     /**
      * Get all available publishers from the record.
      *
-     * @param  Record          record
+     * @param Record record
      * @return Set<String>     publishers
      */
     public Set<String> getPublishers(final Record record) {
@@ -414,8 +414,7 @@ public class VuFindIndexer extends SolrIndexer
 
         // First check old-style 260b name:
         List<VariableField> list260 = record.getVariableFields("260");
-        for (VariableField vf : list260)
-        {
+        for (VariableField vf : list260) {
             DataField df = (DataField) vf;
             Subfield current = df.getSubfield('b');
             if (current != null) {
@@ -429,14 +428,12 @@ public class VuFindIndexer extends SolrIndexer
         Set<String> pubNames = new LinkedHashSet<String>();
         Set<String> copyNames = new LinkedHashSet<String>();
         List<VariableField> list264 = record.getVariableFields("264");
-        for (VariableField vf : list264)
-        {
+        for (VariableField vf : list264) {
             DataField df = (DataField) vf;
             Subfield currentName = df.getSubfield('b');
             if (currentName != null) {
                 char ind2 = df.getIndicator2();
-                switch (ind2)
-                {
+                switch (ind2) {
                     case '1':
                         pubNames.add(currentName.getData());
                         break;
@@ -458,7 +455,7 @@ public class VuFindIndexer extends SolrIndexer
     /**
      * Get all available dates from the record.
      *
-     * @param  Record          record
+     * @param Record record
      * @return Set<String>     dates
      */
     public Set<String> getDates(final Record record) {
@@ -476,15 +473,13 @@ public class VuFindIndexer extends SolrIndexer
         Set<String> pubDates = new LinkedHashSet<String>();
         Set<String> copyDates = new LinkedHashSet<String>();
         List<VariableField> list264 = record.getVariableFields("264");
-        for (VariableField vf : list264)
-        {
+        for (VariableField vf : list264) {
             DataField df = (DataField) vf;
             Subfield currentDate = df.getSubfield('c');
             if (currentDate != null) {
                 String currentDateStr = Utils.cleanDate(currentDate.getData());
                 char ind2 = df.getIndicator2();
-                switch (ind2)
-                {
+                switch (ind2) {
                     case '1':
                         pubDates.add(currentDateStr);
                         break;
@@ -506,7 +501,7 @@ public class VuFindIndexer extends SolrIndexer
     /**
      * Get the earliest publication date from the record.
      *
-     * @param  Record          record
+     * @param Record record
      * @return String          earliest date
      */
     public String getFirstDate(final Record record) {
@@ -525,10 +520,10 @@ public class VuFindIndexer extends SolrIndexer
     /**
      * Determine Record Format(s)
      *
-     * @param  Record          record
+     * @param Record record
      * @return Set<String>     format of record
      */
-    public Set<String> getFormat(final Record record){
+    public Set<String> getFormat(final Record record) {
         Set<String> result = new LinkedHashSet<String>();
         String leader = record.getLeader().toString();
         char leaderBit;
@@ -540,7 +535,7 @@ public class VuFindIndexer extends SolrIndexer
 
         // check if there's an h in the 245
         if (title != null) {
-            if (title.getSubfield('h') != null){
+            if (title.getSubfield('h') != null) {
                 if (title.getSubfield('h').getData().toLowerCase().contains("[electronic resource]")) {
                     result.add("Electronic");
                     return result;
@@ -553,14 +548,14 @@ public class VuFindIndexer extends SolrIndexer
         Iterator<VariableField> fieldsIter = fields.iterator();
         if (fields != null) {
             ControlField formatField;
-            while(fieldsIter.hasNext()) {
+            while (fieldsIter.hasNext()) {
                 formatField = (ControlField) fieldsIter.next();
                 formatString = formatField.getData().toUpperCase();
                 formatCode = formatString.length() > 0 ? formatString.charAt(0) : ' ';
                 formatCode2 = formatString.length() > 1 ? formatString.charAt(1) : ' ';
                 switch (formatCode) {
                     case 'A':
-                        switch(formatCode2) {
+                        switch (formatCode2) {
                             case 'D':
                                 result.add("Atlas");
                                 break;
@@ -570,7 +565,7 @@ public class VuFindIndexer extends SolrIndexer
                         }
                         break;
                     case 'C':
-                        switch(formatCode2) {
+                        switch (formatCode2) {
                             case 'A':
                                 result.add("TapeCartridge");
                                 break;
@@ -609,7 +604,7 @@ public class VuFindIndexer extends SolrIndexer
                         result.add("Braille");
                         break;
                     case 'G':
-                        switch(formatCode2) {
+                        switch (formatCode2) {
                             case 'C':
                             case 'D':
                                 result.add("Filmstrip");
@@ -626,7 +621,7 @@ public class VuFindIndexer extends SolrIndexer
                         result.add("Microfilm");
                         break;
                     case 'K':
-                        switch(formatCode2) {
+                        switch (formatCode2) {
                             case 'C':
                                 result.add("Collage");
                                 break;
@@ -660,7 +655,7 @@ public class VuFindIndexer extends SolrIndexer
                         }
                         break;
                     case 'M':
-                        switch(formatCode2) {
+                        switch (formatCode2) {
                             case 'F':
                                 result.add("VideoCassette");
                                 break;
@@ -682,7 +677,7 @@ public class VuFindIndexer extends SolrIndexer
                         result.add("SensorImage");
                         break;
                     case 'S':
-                        switch(formatCode2) {
+                        switch (formatCode2) {
                             case 'D':
                                 result.add("SoundDisc");
                                 break;
@@ -695,7 +690,7 @@ public class VuFindIndexer extends SolrIndexer
                         }
                         break;
                     case 'V':
-                        switch(formatCode2) {
+                        switch (formatCode2) {
                             case 'C':
                                 result.add("VideoCartridge");
                                 break;
@@ -799,16 +794,18 @@ public class VuFindIndexer extends SolrIndexer
 
     /**
      * Extract the call number label from a record
+     *
      * @param record
      * @return Call number label
      */
     public String getFullCallNumber(final Record record) {
 
-        return(getFullCallNumber(record, "099ab:090ab:050ab"));
+        return (getFullCallNumber(record, "099ab:090ab:050ab"));
     }
 
     /**
      * Extract the call number label from a record
+     *
      * @param record
      * @return Call number label
      */
@@ -825,6 +822,7 @@ public class VuFindIndexer extends SolrIndexer
 
     /**
      * Extract the call number label from a record
+     *
      * @param record
      * @return Call number label
      */
@@ -835,6 +833,7 @@ public class VuFindIndexer extends SolrIndexer
 
     /**
      * Extract the call number label from a record
+     *
      * @param record
      * @return Call number label
      */
@@ -855,7 +854,7 @@ public class VuFindIndexer extends SolrIndexer
 
     /**
      * Extract the subject component of the call number
-     *
+     * <p/>
      * Can return null
      *
      * @param record
@@ -863,12 +862,12 @@ public class VuFindIndexer extends SolrIndexer
      */
     public String getCallNumberSubject(final Record record) {
 
-        return(getCallNumberSubject(record, "090a:050a"));
+        return (getCallNumberSubject(record, "090a:050a"));
     }
 
     /**
      * Extract the subject component of the call number
-     *
+     * <p/>
      * Can return null
      *
      * @param record
@@ -879,19 +878,18 @@ public class VuFindIndexer extends SolrIndexer
         String val = getFirstFieldVal(record, fieldSpec);
 
         if (val != null) {
-            String [] callNumberSubject = val.toUpperCase().split("[^A-Z]+");
-            if (callNumberSubject.length > 0)
-            {
+            String[] callNumberSubject = val.toUpperCase().split("[^A-Z]+");
+            if (callNumberSubject.length > 0) {
                 return callNumberSubject[0];
             }
         }
-        return(null);
+        return (null);
     }
 
     /**
      * Determine if a record is illustrated.
      *
-     * @param  Record          record
+     * @param Record record
      * @return String   "Illustrated" or "Not Illustrated"
      */
     public String isIllustrated(Record record) {
@@ -924,11 +922,11 @@ public class VuFindIndexer extends SolrIndexer
             Iterator<VariableField> fieldsIter = fields.iterator();
             if (fields != null) {
                 ControlField formatField;
-                while(fieldsIter.hasNext()) {
+                while (fieldsIter.hasNext()) {
                     fixedField = (ControlField) fieldsIter.next();
                     String fixedFieldText = fixedField.getData().toLowerCase();
                     for (int i = 1; i <= 4; i++) {
-                         if (i < fixedFieldText.length()) {
+                        if (i < fixedFieldText.length()) {
                             currentCode = fixedFieldText.substring(i, i + 1);
                             if (illusCodes.contains(currentCode)) {
                                 return "Illustrated";
@@ -944,7 +942,7 @@ public class VuFindIndexer extends SolrIndexer
         Iterator<VariableField> fieldsIter = fields.iterator();
         if (fields != null) {
             DataField physical;
-            while(fieldsIter.hasNext()) {
+            while (fieldsIter.hasNext()) {
                 physical = (DataField) fieldsIter.next();
                 List<Subfield> subfields = physical.getSubfields('b');
                 Iterator<Subfield> subfieldsIter = subfields.iterator();
@@ -966,14 +964,14 @@ public class VuFindIndexer extends SolrIndexer
 
     /**
      * Extract a numeric portion of the Dewey decimal call number
-     *
+     * <p/>
      * Can return null
      *
      * @param record
-     * @param fieldSpec - which MARC fields / subfields need to be analyzed
+     * @param fieldSpec    - which MARC fields / subfields need to be analyzed
      * @param precisionStr - a decimal number (represented in string format) showing the
-     *  desired precision of the returned number; i.e. 100 to round to nearest hundred,
-     *  10 to round to nearest ten, 0.1 to round to nearest tenth, etc.
+     *                     desired precision of the returned number; i.e. 100 to round to nearest hundred,
+     *                     10 to round to nearest ten, 0.1 to round to nearest tenth, etc.
      * @return Set containing requested numeric portions of Dewey decimal call numbers
      */
     public Set<String> getDeweyNumber(Record record, String fieldSpec, String precisionStr) {
@@ -1010,7 +1008,7 @@ public class VuFindIndexer extends SolrIndexer
 
     /**
      * Normalize Dewey numbers for searching purposes (uppercase/stripped spaces)
-     *
+     * <p/>
      * Can return null
      *
      * @param record
@@ -1043,13 +1041,13 @@ public class VuFindIndexer extends SolrIndexer
 
     /**
      * Normalize Dewey numbers for sorting purposes (use only the first valid number!)
-     *
+     * <p/>
      * Can return null
      *
      * @param record
      * @param fieldSpec - which MARC fields / subfields need to be analyzed
      * @return String containing the first valid Dewey number encountered, normalized
-     *         for sorting purposes.
+     * for sorting purposes.
      */
     public String getDeweySortable(Record record, String fieldSpec) {
         // Loop through the specified MARC fields:
@@ -1071,7 +1069,7 @@ public class VuFindIndexer extends SolrIndexer
 
     /**
      * Normalize Dewey numbers for AlphaBrowse sorting purposes (use all numbers!)
-     *
+     * <p/>
      * Can return null
      *
      * @param record
@@ -1104,7 +1102,7 @@ public class VuFindIndexer extends SolrIndexer
     /**
      * Determine the longitude and latitude of the items location.
      *
-     * @param  Record    record
+     * @param Record record
      * @return String    "longitude, latitude"
      */
     public String getLongLat(Record record) {
@@ -1113,7 +1111,7 @@ public class VuFindIndexer extends SolrIndexer
         Iterator<VariableField> fieldsIter = fields.iterator();
         if (fields != null) {
             DataField physical;
-            while(fieldsIter.hasNext()) {
+            while (fieldsIter.hasNext()) {
                 physical = (DataField) fieldsIter.next();
                 String val = null;
 
@@ -1138,7 +1136,7 @@ public class VuFindIndexer extends SolrIndexer
                         val = val + ',' + val2;
                     }
                 }
-            return val;
+                return val;
             }
         }
         //otherwise return null
@@ -1151,8 +1149,7 @@ public class VuFindIndexer extends SolrIndexer
      * allow the history of our indexing activity to be stored permanently in a
      * fashion that can survive even a total Solr rebuild.
      */
-    public UpdateDateTracker updateTracker(String core, String id, java.util.Date latestTransaction)
-    {
+    public UpdateDateTracker updateTracker(String core, String id, java.util.Date latestTransaction) {
         // Initialize date tracker if not already initialized:
         loadUpdateDateTracker();
 
@@ -1254,10 +1251,9 @@ public class VuFindIndexer extends SolrIndexer
      *
      * @return String[]
      */
-    public String[] getFulltextParserSettings()
-    {
+    public String[] getFulltextParserSettings() {
         String parserType = getConfigSetting(
-            "fulltext.ini", "General", "parser"
+                "fulltext.ini", "General", "parser"
         );
         if (null != parserType) {
             parserType = parserType.toLowerCase();
@@ -1265,28 +1261,28 @@ public class VuFindIndexer extends SolrIndexer
 
         // Is Aperture active?
         String aperturePath = getConfigSetting(
-            "fulltext.ini", "Aperture", "webcrawler"
+                "fulltext.ini", "Aperture", "webcrawler"
         );
         if ((null == parserType && null != aperturePath)
-            || (null != parserType && parserType.equals("aperture"))
-        ) {
-            String[] array = { "aperture", aperturePath };
+                || (null != parserType && parserType.equals("aperture"))
+                ) {
+            String[] array = {"aperture", aperturePath};
             return array;
         }
 
         // Is Tika active?
         String tikaPath = getConfigSetting(
-            "fulltext.ini", "Tika", "path"
+                "fulltext.ini", "Tika", "path"
         );
         if ((null == parserType && null != tikaPath)
-            || (null != parserType && parserType.equals("tika"))
-        ) {
-            String[] array = { "tika", tikaPath };
+                || (null != parserType && parserType.equals("tika"))
+                ) {
+            String[] array = {"tika", tikaPath};
             return array;
         }
 
         // No recognized parser found:
-        String[] array = { "none", null };
+        String[] array = {"none", null};
         return array;
     }
 
@@ -1311,7 +1307,7 @@ public class VuFindIndexer extends SolrIndexer
         Set<String> fields = getFieldList(record, fieldSpec);
         Iterator<String> fieldsIter = fields.iterator();
         if (fields != null) {
-            while(fieldsIter.hasNext()) {
+            while (fieldsIter.hasNext()) {
                 // Get the current string to work on:
                 String current = fieldsIter.next();
                 // Filter by file extension
@@ -1352,8 +1348,7 @@ public class VuFindIndexer extends SolrIndexer
      * @param File The file to clean
      * @return File A fixed version of the file
      */
-    public File sanitizeApertureOutput(File f) throws IOException
-    {
+    public File sanitizeApertureOutput(File f) throws IOException {
         //clean up the aperture xml output
         File tempFile = File.createTempFile("buffer", ".tmp");
         FileOutputStream fw = new FileOutputStream(tempFile);
@@ -1378,8 +1373,7 @@ public class VuFindIndexer extends SolrIndexer
      * @param String Text to clean
      * @return String Cleaned text
      */
-    public String sanitizeFullText(String text)
-    {
+    public String sanitizeFullText(String text) {
         String badChars = "[^\\u0009\\u000A\\u000D\\u0020-\\uD7FF\\uE000-\\uFFFD\\u10000-\\u10FFFF]+";
         return text.replaceAll(badChars, " ");
     }
@@ -1408,14 +1402,14 @@ public class VuFindIndexer extends SolrIndexer
         f.deleteOnExit();
 
         // Construct the command to call Aperture
-        String cmd = aperturePath + " -o " + f.getAbsolutePath().toString()  + " -x " + url;
+        String cmd = aperturePath + " -o " + f.getAbsolutePath().toString() + " -x " + url;
 
         // Call Aperture
         //System.out.println("Loading fulltext from " + url + ". Please wait ...");
         try {
             Process p = Runtime.getRuntime().exec(cmd);
             BufferedReader stdInput = new BufferedReader(new
-                InputStreamReader(p.getInputStream()));
+                    InputStreamReader(p.getInputStream()));
             String s;
             while ((s = stdInput.readLine()) != null) {
                 //System.out.println(s);
@@ -1434,7 +1428,7 @@ public class VuFindIndexer extends SolrIndexer
             File tempFile = sanitizeApertureOutput(f);
             xmlDoc = db.parse(tempFile);
             NodeList nl = xmlDoc.getElementsByTagName("plainTextContent");
-            if(nl != null && nl.getLength() > 0) {
+            if (nl != null && nl.getLength() > 0) {
                 Node node = nl.item(0);
                 if (node.getNodeType() == Node.ELEMENT_NODE) {
                     plainText = plainText + node.getTextContent();
@@ -1466,14 +1460,14 @@ public class VuFindIndexer extends SolrIndexer
         // Construct the command
         String cmd = "java -jar " + scraperPath + " -t -eUTF8 " + url;
 
-        StringBuilder stringBuilder= new StringBuilder();
+        StringBuilder stringBuilder = new StringBuilder();
 
         // Call our scraper
         //System.out.println("Loading fulltext from " + url + ". Please wait ...");
         try {
             Process p = Runtime.getRuntime().exec(cmd);
             BufferedReader stdInput = new BufferedReader(new
-                InputStreamReader(p.getInputStream(), "UTF8"));
+                    InputStreamReader(p.getInputStream(), "UTF8"));
 
             // We'll build the string from the command output
             String s;
@@ -1490,7 +1484,7 @@ public class VuFindIndexer extends SolrIndexer
     /**
      * Harvest the contents of a document file (PDF, Word, etc.) using the active parser.
      *
-     * @param String The url extracted from the MARC tag.
+     * @param String   The url extracted from the MARC tag.
      * @param String[] Configuration settings from getFulltextParserSettings.
      * @return String The full-text
      */
@@ -1508,8 +1502,7 @@ public class VuFindIndexer extends SolrIndexer
      *
      * @return Logger
      */
-    public Logger getLogger()
-    {
+    public Logger getLogger() {
         return logger;
     }
 }
