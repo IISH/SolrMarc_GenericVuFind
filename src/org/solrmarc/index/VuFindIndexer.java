@@ -243,10 +243,10 @@ public class VuFindIndexer extends SolrIndexer {
 
         String dsn = System.getenv("VUFIND_DATABASE_DATABASE");
         if (dsn == null) {
-            logger.info("Using database setting for key 'config.ini[Database]database' from environment VUFIND_DATABASE_DATABASE") ;
+            logger.info("Setting 'config.ini[Database]database' from config.ini") ;
             dsn = getConfigSetting("config.ini", "Database", "database");
         } else {
-            logger.info("Used database setting for key 'config.ini[Database]database' from config.ini") ;
+            logger.info("Set 'config.ini[Database]database' from environment") ;
         }
 
         try {
