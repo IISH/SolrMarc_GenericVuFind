@@ -38,11 +38,14 @@ import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 
 import org.apache.log4j.Logger;
+import org.apache.solr.client.solrj.SolrServer;
 import org.marc4j.marc.ControlField;
 import org.marc4j.marc.DataField;
 import org.marc4j.marc.Record;
 import org.marc4j.marc.Subfield;
 import org.marc4j.marc.VariableField;
+import org.solrmarc.solr.SolrCoreLoader;
+import org.solrmarc.solr.SolrServerProxy;
 import org.solrmarc.tools.CallNumUtils;
 import org.solrmarc.tools.SolrMarcIndexerException;
 import org.solrmarc.tools.Utils;
@@ -68,11 +71,15 @@ public class VuFindIndexer extends SolrIndexer {
     private Connection vufindDatabase = null;
     private UpdateDateTracker tracker = null;
 
+    // Initialize Solr fulltext index connection (null until explicitly activated)
+    private SolrServerProxy solrProxy = null;
+
     private static SimpleDateFormat marc005date = new SimpleDateFormat("yyyyMMddHHmmss.S");
     private static SimpleDateFormat marc008date = new SimpleDateFormat("yyMMdd");
 
     // Shutdown flag:
     private boolean shuttingDown = false;
+    private boolean addedShutdownHook = false;
 
     // VuFind-specific configs:
     private Properties vuFindConfigs = null;
@@ -284,7 +291,30 @@ public class VuFindIndexer extends SolrIndexer {
             dieWithError(e.getMessage() + " Unable to connect to VuFind database");
         }
 
-        Runtime.getRuntime().addShutdownHook(new VuFindShutdownThread(this));
+        addShutdownHook();
+    }
+
+    /**
+     * Connect to the Sor fulltext index if we do not already have a connection.
+     */
+    private void connectToSolr() {
+        // Already connected?  Do nothing further!
+        if (solrProxy != null) {
+            return;
+        }
+
+        String solrFullTextUrl = "http://localhost:8080/solr/fulltext/update";
+        solrProxy = (SolrServerProxy) SolrCoreLoader.loadRemoteSolrServer(solrFullTextUrl, true, false);
+        logger.info("Created a Solr connection to the fulltext index");
+
+        addShutdownHook();
+    }
+
+    private void addShutdownHook() {
+        if (!addedShutdownHook) {
+            Runtime.getRuntime().addShutdownHook(new VuFindShutdownThread(this));
+            addedShutdownHook = true;
+        }
     }
 
     private void disconnectFromDatabase() {
@@ -298,8 +328,15 @@ public class VuFindIndexer extends SolrIndexer {
         }
     }
 
+    private void disconnectFromSolr() {
+        if (solrProxy != null) {
+            solrProxy.close();
+        }
+    }
+
     public void shutdown() {
         disconnectFromDatabase();
+        disconnectFromSolr();
         shuttingDown = true;
     }
 
@@ -369,6 +406,15 @@ public class VuFindIndexer extends SolrIndexer {
             retVal = new java.util.Date(0);
         }
         return retVal;
+    }
+
+    /**
+     * Establish a connection to the Solr fulltext index and return the connection.
+     * @return The Solr server connection.
+     */
+    public SolrServer getSolrServer() {
+        connectToSolr();
+        return solrProxy.getSolrServer();
     }
 
     /**
